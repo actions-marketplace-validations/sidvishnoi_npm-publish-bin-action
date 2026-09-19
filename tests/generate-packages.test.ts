@@ -38,20 +38,18 @@ describe("sharedTemplateFields", () => {
 });
 
 describe("platformPackageName", () => {
-	test("scopes when a scope is given", () => {
-		expect(platformPackageName("@mytool", "mytool", "darwin", "arm64", null)).to.equal(
+	test("joins an npm scope with a slash", () => {
+		expect(platformPackageName("@mytool", "darwin", "arm64", null)).to.equal(
 			"@mytool/darwin-arm64",
 		);
 	});
 
-	test("falls back to a prefixed name without a scope", () => {
-		expect(platformPackageName("", "mytool", "darwin", "arm64", null)).to.equal(
-			"mytool-darwin-arm64",
-		);
+	test("joins an unscoped prefix with a dash", () => {
+		expect(platformPackageName("mytool", "darwin", "arm64", null)).to.equal("mytool-darwin-arm64");
 	});
 
 	test("appends the libc variant when given", () => {
-		expect(platformPackageName("@mytool", "mytool", "linux", "x64", "musl")).to.equal(
+		expect(platformPackageName("@mytool", "linux", "x64", "musl")).to.equal(
 			"@mytool/linux-x64-musl",
 		);
 	});

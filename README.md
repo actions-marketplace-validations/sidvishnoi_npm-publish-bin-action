@@ -56,7 +56,7 @@ See [`action.yml`](action.yml) for the full descriptions; here's a summary:
 | `tag` | yes | | Release tag to publish from. |
 | `github-token` | yes | | Token used to list and download release assets via `gh release`. |
 | `npm-token` | no | none (OIDC) | npm auth token; omit to publish via OIDC trusted publishing instead. |
-| `scope` | no | `@<package-name>` | npm scope for the per-platform packages. |
+| `scope` | no | `@<package-name>` | Prefix for the per-platform packages: an npm scope (`@mytool`), or unscoped (`mytool`) if it doesn't start with `@`. |
 | `bin-name` | no | `package-name` | Executable name, and what asset filenames are expected to mention. |
 | `package-json-template` | no | none | Path to a `package.json`-shaped file for fields that don't vary per platform. |
 | `readme` | no | repo's `README.md` | README to include in the main package. |

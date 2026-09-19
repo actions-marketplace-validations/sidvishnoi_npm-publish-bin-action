@@ -133,7 +133,7 @@ function buildPlatformPackage(params: {
 	const { target, scope, packageName, binName, version, work, dist, sharedFields, license } =
 		params;
 	const { os, cpu, libc } = target;
-	const pkgName = platformPackageName(scope, packageName, os, cpu, libc);
+	const pkgName = platformPackageName(scope, os, cpu, libc);
 
 	const dir = path.join(work, "pkg", pkgName);
 	const binDir = path.join(dir, "bin");
@@ -188,13 +188,12 @@ export function sharedTemplateFields(template: PackageJsonTemplate): PackageJson
 
 export function platformPackageName(
 	scope: string,
-	packageName: string,
 	os: string,
 	cpu: string,
 	libc: string | null,
 ): string {
 	const platform = platformSlug(os, cpu, libc);
-	return scope ? `${scope}/${platform}` : `${packageName}-${platform}`;
+	return scope.startsWith("@") ? `${scope}/${platform}` : `${scope}-${platform}`;
 }
 
 function platformSlug(os: string, cpu: string, libc: string | null): string {

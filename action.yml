@@ -11,7 +11,9 @@ inputs:
     required: true
   scope:
     description: >-
-      npm scope for the per-platform packages, e.g. "@mytool" publishes "@mytool/<os>-<cpu>".
+      Prefix for the per-platform packages. A value starting with "@" is an npm scope,
+      e.g. "@mytool" publishes "@mytool/<os>-<cpu>". Anything else is a literal unscoped
+      prefix, e.g. "mytool" publishes "mytool-<os>-<cpu>".
       Defaults to "@<package-name>".
     required: false
     default: ""

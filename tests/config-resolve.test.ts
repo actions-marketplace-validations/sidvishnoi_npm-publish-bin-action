@@ -29,6 +29,19 @@ describe("resolveConfig", () => {
 		expect(resolveConfig({ ...base, scope: "@custom" }).scope).to.equal("@custom");
 	});
 
+	test("accepts an unscoped prefix as-is", () => {
+		expect(resolveConfig({ ...base, scope: "custom" }).scope).to.equal("custom");
+	});
+
+	test("strips a trailing dash from an unscoped prefix", () => {
+		expect(resolveConfig({ ...base, scope: "custom-" }).scope).to.equal("custom");
+		expect(resolveConfig({ ...base, scope: "custom---" }).scope).to.equal("custom");
+	});
+
+	test("does not strip a trailing dash from a scoped prefix", () => {
+		expect(resolveConfig({ ...base, scope: "@custom-" }).scope).to.equal("@custom-");
+	});
+
 	test("defaults binName to packageName", () => {
 		expect(resolveConfig(base).binName).to.equal("mytool");
 	});

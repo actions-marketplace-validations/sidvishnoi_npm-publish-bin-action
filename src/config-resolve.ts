@@ -71,7 +71,12 @@ export function resolveConfig(raw: RawConfig): ResolvedConfig {
 		tag: raw.tag,
 		version: raw.tag.replace(/^v/, ""),
 		packageName: raw.packageName,
-		scope: raw.scope || `@${raw.packageName}`,
+		scope: normalizeScope(raw.scope, raw.packageName),
 		binName: raw.binName || raw.packageName,
 	};
+}
+
+function normalizeScope(scope: string, packageName: string): string {
+	scope ||= `@${packageName}`;
+	return scope.startsWith("@") ? scope : scope.replace(/-+$/, "");
 }
