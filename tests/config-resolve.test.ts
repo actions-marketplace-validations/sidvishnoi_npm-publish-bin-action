@@ -13,41 +13,47 @@ import { tmpDir } from "./helpers.ts";
 describe("resolveConfig", () => {
 	const base: RawConfig = { tag: "v1.2.3", packageName: "mytool", scope: "", binName: "" };
 
-	test("strips a leading v from the tag for version", () => {
-		expect(resolveConfig(base).version).to.equal("1.2.3");
+	describe("version", () => {
+		test("strips a leading v from the tag", () => {
+			expect(resolveConfig(base).version).to.equal("1.2.3");
+		});
+
+		test("keeps a tag with no leading v as-is", () => {
+			expect(resolveConfig({ ...base, tag: "1.2.3" }).version).to.equal("1.2.3");
+		});
 	});
 
-	test("keeps a tag with no leading v as-is for version", () => {
-		expect(resolveConfig({ ...base, tag: "1.2.3" }).version).to.equal("1.2.3");
+	describe("scope", () => {
+		test("defaults to @packageName", () => {
+			expect(resolveConfig(base).scope).to.equal("@mytool");
+		});
+
+		test("respects an explicit scope", () => {
+			expect(resolveConfig({ ...base, scope: "@custom" }).scope).to.equal("@custom");
+		});
+
+		test("accepts an unscoped prefix as-is", () => {
+			expect(resolveConfig({ ...base, scope: "custom" }).scope).to.equal("custom");
+		});
+
+		test("strips a trailing dash from an unscoped prefix", () => {
+			expect(resolveConfig({ ...base, scope: "custom-" }).scope).to.equal("custom");
+			expect(resolveConfig({ ...base, scope: "custom---" }).scope).to.equal("custom");
+		});
+
+		test("does not strip a trailing dash from a scoped prefix", () => {
+			expect(resolveConfig({ ...base, scope: "@custom-" }).scope).to.equal("@custom-");
+		});
 	});
 
-	test("defaults scope to @packageName", () => {
-		expect(resolveConfig(base).scope).to.equal("@mytool");
-	});
+	describe("binName", () => {
+		test("defaults to packageName", () => {
+			expect(resolveConfig(base).binName).to.equal("mytool");
+		});
 
-	test("respects an explicit scope", () => {
-		expect(resolveConfig({ ...base, scope: "@custom" }).scope).to.equal("@custom");
-	});
-
-	test("accepts an unscoped prefix as-is", () => {
-		expect(resolveConfig({ ...base, scope: "custom" }).scope).to.equal("custom");
-	});
-
-	test("strips a trailing dash from an unscoped prefix", () => {
-		expect(resolveConfig({ ...base, scope: "custom-" }).scope).to.equal("custom");
-		expect(resolveConfig({ ...base, scope: "custom---" }).scope).to.equal("custom");
-	});
-
-	test("does not strip a trailing dash from a scoped prefix", () => {
-		expect(resolveConfig({ ...base, scope: "@custom-" }).scope).to.equal("@custom-");
-	});
-
-	test("defaults binName to packageName", () => {
-		expect(resolveConfig(base).binName).to.equal("mytool");
-	});
-
-	test("respects an explicit binName", () => {
-		expect(resolveConfig({ ...base, binName: "wc" }).binName).to.equal("wc");
+		test("respects an explicit binName", () => {
+			expect(resolveConfig({ ...base, binName: "wc" }).binName).to.equal("wc");
+		});
 	});
 
 	test("passes packageName through unchanged", () => {
