@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+"use strict";
+
+const path = require("path");
+const { spawnSync } = require("child_process");
+
+const PACKAGES = __PACKAGES_JSON__;
+
+const key = `${process.platform} ${process.arch}`;
+const candidates = PACKAGES[key];
+
+if (!candidates) {
+  console.error(`__BIN_NAME__: unsupported platform "${key}"`);
+  process.exit(1);
+}
+
+const binName = process.platform === "win32" ? "__BIN_NAME__.exe" : "__BIN_NAME__";
+let binPath;
+for (const pkg of candidates) {
+  try {
+    const pkgJsonPath = require.resolve(`${pkg}/package.json`);
+    binPath = path.join(path.dirname(pkgJsonPath), "bin", binName);
+    break;
+  } catch {
+    // try the next candidate (there's more than one when a platform has a glibc/musl split)
+  }
+}
+
+if (!binPath) {
+  console.error(
+    `__BIN_NAME__: could not find the binary for "${key}".\n` +
+      `None of its optional dependencies for this platform (${candidates.join(", ")}) got installed. This can happen if you used ` +
+      `--no-optional, or your package manager/lockfile skipped platform-specific optional dependencies.`
+  );
+  process.exit(1);
+}
+
+const result = spawnSync(binPath, process.argv.slice(2), { stdio: "inherit" });
+if (result.error) {
+  console.error(result.error.message);
+  process.exit(1);
+}
+process.exit(result.status === null ? 1 : result.status);

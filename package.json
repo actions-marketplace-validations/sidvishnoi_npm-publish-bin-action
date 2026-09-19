@@ -1,0 +1,24 @@
+{
+	"name": "publish-npm-action",
+	"private": true,
+	"type": "module",
+	"description": "",
+	"imports": {
+		"#src/*": "./src/*"
+	},
+	"packageManager": "pnpm@12.4.2",
+	"scripts": {
+		"test": "node --test --experimental-test-coverage --test-coverage-exclude='**/*.test.ts' --test-coverage-exclude='tests/helpers.ts'",
+		"typecheck": "tsc --noEmit",
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check --write ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.14",
+		"@types/chai": "^5.2.3",
+		"@types/node": "^24.13.5",
+		"chai": "^6.2.2",
+		"typescript": "^7.0.2"
+	}
+}

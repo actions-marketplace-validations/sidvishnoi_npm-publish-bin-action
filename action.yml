@@ -1,0 +1,122 @@
+name: Publish npm packages
+description: >
+  Publishes prebuilt CLI binaries (e.g. from goreleaser) to npm, without any
+  postinstall scripts. One scoped package per platform/arch carries just that
+  platform's binary. A main package depends on all of them as optionalDependencies
+  and execs the right one at runtime. Works with binaries from any toolchain (Go,
+  Rust, Zig etc.) by inspecting the release's asset filenames for each one's os/cpu.
+inputs:
+  package-name:
+    description: Name of the main npm package (e.g. "mytool").
+    required: true
+  scope:
+    description: >-
+      npm scope for the per-platform packages, e.g. "@mytool" publishes "@mytool/<os>-<cpu>".
+      Defaults to "@<package-name>".
+    required: false
+    default: ""
+  bin-name:
+    description: >-
+      Name of the executable. Release asset filenames are expected to mention it.
+      Defaults to package-name.
+    required: false
+    default: ""
+  tag:
+    description: Release tag to publish from (e.g. v1.2.3).
+    required: true
+  package-json-template:
+    description: >-
+      Path (relative to the repo root) to a package.json-shaped file. Its fields
+      (description, license, repository, author, keywords, ...) are copied into
+      every published package.json. "name", "version", "bin", "files", and
+      "optionalDependencies" are always computed by this GitHub Action and override the
+      template. The template only needs to carry the parts that don't vary per-target.
+      Omit it to publish with no extra fields beyond what this GitHub Action computes.
+    required: false
+    default: ""
+  readme:
+    description: >-
+      Path to the README included in the main npm package.
+      Defaults to the repo's own README.md. Platform packages get no README -
+      they're not meant to be installed or browsed directly.
+    required: false
+    default: ""
+  license-file:
+    description: >-
+      Path to a LICENSE file to include in every published package (the main package
+      and every platform package).
+      Defaults to the repo's own LICENSE file, if any; omitting this leaves packages
+      without a LICENSE only when the repo doesn't have one either.
+    required: false
+    default: ""
+  github-token:
+    description: Token used to list and download release assets via `gh release`.
+    required: true
+  npm-token:
+    description: >-
+      npm auth token used to publish the packages.
+      Omit it to publish via OIDC trusted publishing instead. This requires the
+      calling workflow to grant `permissions: id-token: write`. It also requires
+      this repo/workflow to be configured as a trusted publisher for every package
+      on npmjs.com.
+    required: false
+    default: ""
+  registry-url:
+    description: npm registry to publish to.
+    required: false
+    default: "https://registry.npmjs.org"
+  dry-run:
+    description: >-
+      If "true", runs `npm publish --dry-run` for every package instead of actually publishing.
+    required: false
+    default: "false"
+  provenance:
+    description: >-
+      If "true", passes `--provenance` to every `npm publish` call. npm then
+      generates an attestation for each package. This requires the calling workflow to
+      grant `permissions: id-token: write`.
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        registry-url: ${{ inputs.registry-url }}
+
+    - name: Resolve configuration
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        PACKAGE_NAME: ${{ inputs.package-name }}
+        SCOPE: ${{ inputs.scope }}
+        BIN_NAME: ${{ inputs.bin-name }}
+        PACKAGE_JSON_TEMPLATE: ${{ inputs.package-json-template }}
+        README: ${{ inputs.readme }}
+        LICENSE_FILE: ${{ inputs.license-file }}
+      run: node "${{ github.action_path }}/src/config-resolve.ts"
+
+    - name: Discover release assets
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "${{ github.action_path }}/src/discover-targets.ts"
+
+    - name: Download release archives
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$DIST" --clobber
+
+    - name: Extract binaries and generate package manifests
+      shell: bash
+      run: node "${{ github.action_path }}/src/generate-packages.ts"
+
+    - name: Publish packages
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        PROVENANCE: ${{ inputs.provenance }}
+      run: node "${{ github.action_path }}/src/publish-npm.ts"
