@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import { expect } from "chai";
 import {
 	appendGithubEnv,
+	appendStepSummary,
 	env,
 	readJsonFile,
 	run,
@@ -201,5 +202,26 @@ describe("appendGithubEnv", () => {
 		expect(contents).to.equal("EXISTING=1\nFOO=bar\nBAZ=qux\n");
 
 		delete process.env.GITHUB_ENV;
+	});
+});
+
+describe("appendStepSummary", () => {
+	test("appends markdown to GITHUB_STEP_SUMMARY", () => {
+		const dir = tmpDir();
+		const summaryFile = path.join(dir, "step_summary");
+		fs.writeFileSync(summaryFile, "# Existing\n");
+		process.env.GITHUB_STEP_SUMMARY = summaryFile;
+
+		appendStepSummary("## New section");
+
+		const contents = fs.readFileSync(summaryFile, "utf8");
+		expect(contents).to.equal("# Existing\n## New section\n");
+
+		delete process.env.GITHUB_STEP_SUMMARY;
+	});
+
+	test("does nothing when GITHUB_STEP_SUMMARY is unset", () => {
+		delete process.env.GITHUB_STEP_SUMMARY;
+		expect(() => appendStepSummary("## New section")).to.not.throw();
 	});
 });

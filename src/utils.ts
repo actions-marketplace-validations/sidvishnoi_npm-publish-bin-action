@@ -97,6 +97,12 @@ export function appendGithubEnv(vars: Record<string, string>): void {
 	fs.appendFileSync(githubEnvPath, `${lines.join("\n")}\n`);
 }
 
+export function appendStepSummary(markdown: string): void {
+	const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+	if (!summaryPath) return;
+	fs.appendFileSync(summaryPath, `${markdown}\n`);
+}
+
 // test-only hook
 const binOverrides = new Map<string, string>();
 export function withBinOverride<T>(name: string, resolvedPath: string, fn: () => T): T {
