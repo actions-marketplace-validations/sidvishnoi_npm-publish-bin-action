@@ -1,10 +1,7 @@
 name: Publish npm packages
-description: >
-  Publishes prebuilt CLI binaries (e.g. from goreleaser) to npm, without any
-  postinstall scripts. One scoped package per platform/arch carries just that
-  platform's binary. A main package depends on all of them as optionalDependencies
-  and execs the right one at runtime. Works with binaries from any toolchain (Go,
-  Rust, Zig etc.) by inspecting the release's asset filenames for each one's os/cpu.
+description: >-
+  Publishes prebuilt CLI binaries to npm as per-platform optionalDependencies
+  packages, without any postinstall scripts.
 inputs:
   package-name:
     description: Name of the main npm package (e.g. "mytool").
