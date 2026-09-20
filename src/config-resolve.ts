@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { appendGithubEnv, env, run } from "./utils.ts";
+import { appendGithubEnv, env, run, withGroup } from "./utils.ts";
 
 if (import.meta.main) {
 	run(configResolve, {
@@ -40,6 +40,14 @@ export function configResolve({
 	runnerTemp,
 }: IConfigResolve): void {
 	const resolved = resolveConfig({ tag, packageName, scope, binName, mode });
+
+	withGroup("Resolved configuration", () => {
+		console.log(`package: ${resolved.packageName}`);
+		console.log(`scope: ${resolved.scope}`);
+		console.log(`bin: ${resolved.binName}`);
+		console.log(`version: ${resolved.version} (tag ${resolved.tag})`);
+		console.log(`mode: ${resolved.mode}`);
+	});
 
 	const work = path.join(runnerTemp, "npm-publish");
 	const dist = path.join(work, "dist");

@@ -1,5 +1,5 @@
 import type { PlatformPackage } from "./generate-packages.ts";
-import { env, run, sh } from "./utils.ts";
+import { env, run, sh, withGroup } from "./utils.ts";
 
 if (import.meta.main) {
 	run(publishNpm, {
@@ -30,21 +30,34 @@ export function publishNpm({
 	provenance = false,
 }: IPublishNpm): void {
 	const flags = [...(dryRun ? ["--dry-run"] : []), ...(provenance ? ["--provenance"] : [])];
+	const entries = [...platformPackages, { dir: mainDir, name: packageName }];
+	const total = entries.length;
 
-	for (const { dir, name } of platformPackages) {
-		console.log(`==> Publishing ${name}@${version}`);
+	if (dryRun) console.log("::notice::DRY RUN — no packages will actually be published");
+
+	const results: Array<{ name: string; status: "published" | "skipped" }> = [];
+
+	entries.forEach(({ dir, name }, i) => {
+		const label = `[${i + 1}/${total}]`;
+		console.log(`${label} Publishing ${name}@${version}`);
 		try {
 			sh`npm publish --access public ${flags} ${dir}`;
+			results.push({ name, status: "published" });
 		} catch (err) {
 			if (!isAlreadyPublished(name, version)) throw err;
 			console.warn(
-				`==> skipping ${name}@${version}: already published (resuming a previously interrupted run)`,
+				`${label} skipping ${name}@${version}: already published (resuming a previously interrupted run)`,
 			);
+			results.push({ name, status: "skipped" });
 		}
-	}
+		console.log("");
+	});
 
-	console.log(`==> Publishing ${packageName}@${version}`);
-	sh`npm publish --access public ${flags} ${mainDir}`;
+	withGroup(`Publish summary (${total})`, () => {
+		for (const { name, status } of results) {
+			console.log(`- ${name}@${version}: ${status}`);
+		}
+	});
 }
 
 function isAlreadyPublished(packageName: string, version: string): boolean {
