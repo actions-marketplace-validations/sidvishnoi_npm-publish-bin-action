@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: sidvishnoi/npm-publish-bin-action@main
+      - uses: sidvishnoi/npm-publish-bin-action@v1
         with:
           package-name: mytool
           tag: ${{ github.ref_name }}
