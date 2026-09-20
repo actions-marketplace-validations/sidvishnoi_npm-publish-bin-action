@@ -8,6 +8,7 @@ if (import.meta.main) {
 		packageName: env("PACKAGE_NAME"),
 		scope: env("SCOPE", ""),
 		binName: env("BIN_NAME", ""),
+		mode: env("MODE", ""),
 		packageJsonTemplate: env("PACKAGE_JSON_TEMPLATE", ""),
 		readme: env("README", ""),
 		licenseFile: env("LICENSE_FILE", ""),
@@ -20,6 +21,7 @@ export interface IConfigResolve {
 	packageName: string;
 	scope: string;
 	binName: string;
+	mode: string;
 	packageJsonTemplate: string;
 	readme: string;
 	licenseFile: string;
@@ -31,12 +33,13 @@ export function configResolve({
 	packageName,
 	scope,
 	binName,
+	mode,
 	packageJsonTemplate,
 	readme,
 	licenseFile,
 	runnerTemp,
 }: IConfigResolve): void {
-	const resolved = resolveConfig({ tag, packageName, scope, binName });
+	const resolved = resolveConfig({ tag, packageName, scope, binName, mode });
 
 	const work = path.join(runnerTemp, "npm-publish");
 	const dist = path.join(work, "dist");
@@ -48,6 +51,7 @@ export function configResolve({
 		PACKAGE_NAME: resolved.packageName,
 		SCOPE: resolved.scope,
 		BIN_NAME: resolved.binName,
+		MODE: resolved.mode,
 		PACKAGE_JSON_TEMPLATE: packageJsonTemplate,
 		README: readme,
 		LICENSE_FILE: licenseFile,
@@ -56,7 +60,7 @@ export function configResolve({
 	});
 }
 
-export type RawConfig = Pick<IConfigResolve, "tag" | "packageName" | "scope" | "binName">;
+export type RawConfig = Pick<IConfigResolve, "tag" | "packageName" | "scope" | "binName" | "mode">;
 
 interface ResolvedConfig {
 	tag: string;
@@ -64,6 +68,7 @@ interface ResolvedConfig {
 	packageName: string;
 	scope: string;
 	binName: string;
+	mode: "multi" | "single";
 }
 
 export function resolveConfig(raw: RawConfig): ResolvedConfig {
@@ -73,7 +78,16 @@ export function resolveConfig(raw: RawConfig): ResolvedConfig {
 		packageName: raw.packageName,
 		scope: normalizeScope(raw.scope, raw.packageName),
 		binName: raw.binName || raw.packageName,
+		mode: normalizeMode(raw.mode),
 	};
+}
+
+function normalizeMode(mode: string): "multi" | "single" {
+	const value = mode || "multi";
+	if (value !== "multi" && value !== "single") {
+		throw new Error(`Invalid mode "${value}": expected "multi" or "single".`);
+	}
+	return value;
 }
 
 function normalizeScope(scope: string, packageName: string): string {

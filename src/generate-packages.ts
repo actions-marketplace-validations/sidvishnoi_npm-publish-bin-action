@@ -16,6 +16,7 @@ if (import.meta.main) {
 		packageName: env("PACKAGE_NAME"),
 		scope: env("SCOPE"),
 		binName: env("BIN_NAME"),
+		mode: env("MODE", "multi"),
 		version: env("VERSION"),
 		work: env("WORK"),
 		dist: env("DIST"),
@@ -41,6 +42,7 @@ export interface IGeneratePackages {
 	packageName: string;
 	scope: string;
 	binName: string;
+	mode: string;
 	version: string;
 	work: string;
 	dist: string;
@@ -54,6 +56,7 @@ export function generatePackages({
 	packageName,
 	scope,
 	binName,
+	mode,
 	version,
 	work,
 	dist,
@@ -63,6 +66,75 @@ export function generatePackages({
 	license,
 }: IGeneratePackages): GenerateResult {
 	const sharedFields = sharedTemplateFields(packageJsonTemplate);
+
+	const mainDir = path.join(work, "pkg", packageName);
+	fs.mkdirSync(path.join(mainDir, "bin"), { recursive: true });
+
+	let platformPackages: PlatformPackage[] = [];
+	let mainPkg: Record<string, unknown>;
+	let wrapperSource: string;
+
+	if (mode === "single") {
+		const platformFiles = buildSinglePackageBinaries({ targets, binName, dist, mainDir });
+		mainPkg = buildMainPackageJson({ packageName, version, binName, sharedFields });
+		wrapperSource = buildWrapperSourceSingle(binName, platformFiles);
+	} else {
+		const { platformPackages: built, platformPackageMap } = buildPlatformPackages({
+			targets,
+			scope,
+			packageName,
+			binName,
+			version,
+			work,
+			dist,
+			sharedFields,
+			license,
+		});
+		platformPackages = built;
+
+		const optionalDependencies = Object.fromEntries(
+			platformPackages.map(({ name }) => [name, version]),
+		);
+		mainPkg = buildMainPackageJson({
+			packageName,
+			version,
+			binName,
+			sharedFields,
+			optionalDependencies,
+		});
+		wrapperSource = buildWrapperSource(binName, platformPackageMap);
+	}
+
+	writeJsonFile(path.join(mainDir, "package.json"), mainPkg);
+	fs.writeFileSync(path.join(mainDir, "bin", binName), wrapperSource, { mode: 0o755 });
+
+	fs.writeFileSync(path.join(mainDir, "README.md"), readme);
+	if (license !== null) fs.writeFileSync(path.join(mainDir, "LICENSE"), license);
+
+	console.log(
+		"Prepared packages:",
+		platformPackages
+			.map((p) => p.name)
+			.concat(packageName)
+			.join(", "),
+	);
+
+	return { mainDir, platformPackages };
+}
+
+function buildPlatformPackages(params: {
+	targets: Target[];
+	scope: string;
+	packageName: string;
+	binName: string;
+	version: string;
+	work: string;
+	dist: string;
+	sharedFields: PackageJsonTemplate;
+	license: string | null;
+}): { platformPackages: PlatformPackage[]; platformPackageMap: Record<string, string[]> } {
+	const { targets, scope, packageName, binName, version, work, dist, sharedFields, license } =
+		params;
 
 	const platformPackageMap: Record<string, string[]> = {};
 	const platformPackages: PlatformPackage[] = [];
@@ -87,36 +159,42 @@ export function generatePackages({
 		platformPackages.push(platformPackage);
 	}
 
-	const mainDir = path.join(work, "pkg", packageName);
-	fs.mkdirSync(path.join(mainDir, "bin"), { recursive: true });
+	return { platformPackages, platformPackageMap };
+}
 
-	const optionalDependencies = Object.fromEntries(
-		platformPackages.map(({ name }) => [name, version]),
-	);
-	const mainPkg = buildMainPackageJson({
-		packageName,
-		version,
-		binName,
-		sharedFields,
-		optionalDependencies,
-	});
-	writeJsonFile(path.join(mainDir, "package.json"), mainPkg);
+export interface PlatformFile {
+	file: string;
+	libc: string | null;
+}
 
-	const wrapperSource = buildWrapperSource(binName, platformPackageMap);
-	fs.writeFileSync(path.join(mainDir, "bin", binName), wrapperSource, { mode: 0o755 });
+function buildSinglePackageBinaries(params: {
+	targets: Target[];
+	binName: string;
+	dist: string;
+	mainDir: string;
+}): Record<string, PlatformFile[]> {
+	const { targets, binName, dist, mainDir } = params;
+	const binDir = path.join(mainDir, "bin");
+	const platformFiles: Record<string, PlatformFile[]> = {};
 
-	fs.writeFileSync(path.join(mainDir, "README.md"), readme);
-	if (license !== null) fs.writeFileSync(path.join(mainDir, "LICENSE"), license);
+	for (const target of targets) {
+		const { os, cpu, libc, filename } = target;
+		const exe = os === "win32" ? ".exe" : "";
+		const file = `${binName}-${platformSlug(os, cpu, libc)}${exe}`;
 
-	console.log(
-		"Prepared packages:",
-		platformPackages
-			.map((p) => p.name)
-			.concat(packageName)
-			.join(", "),
-	);
+		const archive = path.join(dist, filename);
+		const member = `${binName}${exe}`;
 
-	return { mainDir, platformPackages };
+		console.log(`==> extracting ${file} from ${path.basename(archive)}`);
+		extract(archive, member, binDir);
+		fs.renameSync(path.join(binDir, member), path.join(binDir, file));
+
+		const key = `${os} ${cpu}`;
+		platformFiles[key] ??= [];
+		platformFiles[key].push({ file, libc });
+	}
+
+	return platformFiles;
 }
 
 function buildPlatformPackage(params: {
@@ -250,7 +328,7 @@ export function buildMainPackageJson(params: {
 	version: string;
 	binName: string;
 	sharedFields: PackageJsonTemplate;
-	optionalDependencies: Record<string, string>;
+	optionalDependencies?: Record<string, string>;
 }): Record<string, unknown> {
 	const { packageName, version, binName, sharedFields, optionalDependencies } = params;
 	return {
@@ -259,7 +337,7 @@ export function buildMainPackageJson(params: {
 		...sharedFields,
 		bin: { [binName]: `bin/${binName}` },
 		files: ["bin"],
-		optionalDependencies,
+		...(optionalDependencies ? { optionalDependencies } : {}),
 	};
 }
 
@@ -274,5 +352,21 @@ export function buildWrapperSource(
 
 	return template
 		.replaceAll("__PACKAGES_JSON__", () => packagesJson)
+		.replaceAll("__BIN_NAME__", () => binName);
+}
+
+const WRAPPER_TEMPLATE_SINGLE_PATH = fileURLToPath(
+	new URL("./wrapper-template-single.txt", import.meta.url),
+);
+
+export function buildWrapperSourceSingle(
+	binName: string,
+	platformFiles: Record<string, PlatformFile[]>,
+): string {
+	const template = fs.readFileSync(WRAPPER_TEMPLATE_SINGLE_PATH, "utf8");
+	const filesJson = JSON.stringify(platformFiles, null, 2);
+
+	return template
+		.replaceAll("__FILES_JSON__", () => filesJson)
 		.replaceAll("__BIN_NAME__", () => binName);
 }

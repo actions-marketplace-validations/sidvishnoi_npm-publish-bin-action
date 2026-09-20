@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+"use strict";
+
+const path = require("path");
+const fs = require("fs");
+const { spawnSync } = require("child_process");
+
+const FILES = __FILES_JSON__;
+
+function isMusl() {
+  if (!process.report || typeof process.report.getReport !== "function") {
+    try {
+      return fs.readFileSync("/usr/bin/ldd", "utf8").includes("musl");
+    } catch {
+      return false;
+    }
+  }
+  const { glibcVersionRuntime } = process.report.getReport().header;
+  return !glibcVersionRuntime;
+}
+
+const key = `${process.platform} ${process.arch}`;
+const candidates = FILES[key];
+
+if (!candidates) {
+  console.error(`__BIN_NAME__: unsupported platform "${key}"`);
+  process.exit(1);
+}
+
+let chosen = candidates[0];
+if (candidates.length > 1) {
+  const musl = isMusl();
+  chosen = candidates.find((c) => (musl ? c.libc === "musl" : c.libc !== "musl")) ?? candidates[0];
+}
+
+const binPath = path.join(__dirname, chosen.file);
+
+const result = spawnSync(binPath, process.argv.slice(2), { stdio: "inherit" });
+if (result.error) {
+  console.error(result.error.message);
+  process.exit(1);
+}
+process.exit(result.status === null ? 1 : result.status);

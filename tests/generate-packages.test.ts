@@ -7,6 +7,7 @@ import {
 	buildMainPackageJson,
 	buildPlatformPackageJson,
 	buildWrapperSource,
+	buildWrapperSourceSingle,
 	generatePackages,
 	type IGeneratePackages,
 	platformPackageName,
@@ -133,6 +134,23 @@ describe("buildWrapperSource", () => {
 	});
 });
 
+describe("buildWrapperSourceSingle", () => {
+	test("embeds the platform file map (candidates per os/cpu) and is valid JS", () => {
+		const source = buildWrapperSourceSingle("mytool", {
+			"darwin arm64": [{ file: "mytool-darwin-arm64", libc: null }],
+			"linux x64": [
+				{ file: "mytool-linux-x64-glibc", libc: "glibc" },
+				{ file: "mytool-linux-x64-musl", libc: "musl" },
+			],
+		});
+		expect(source).to.match(/mytool-darwin-arm64/);
+		expect(source).to.match(/mytool-linux-x64-glibc/);
+		expect(source).to.match(/mytool-linux-x64-musl/);
+		expect(source).to.match(/mytool: unsupported platform/);
+		new Function(source.replace(/^#!.*\n/, ""));
+	});
+});
+
 describe("tarFlagsFor", () => {
 	test("picks flags by extension, null for zip", () => {
 		expect(tarFlagsFor("foo.zip")).to.be.null;
@@ -154,6 +172,7 @@ describe("generatePackages", () => {
 		packageName: "mytool",
 		scope: "@mytool",
 		binName: "mytool",
+		mode: "multi",
 		version: "1.0.0",
 		readme: "# mytool\n",
 		license: null,
@@ -360,5 +379,134 @@ describe("generatePackages", () => {
 
 		expect(fs.existsSync(path.join(work, "pkg", "mytool", "LICENSE"))).to.be.false;
 		expect(fs.existsSync(path.join(work, "pkg", "@mytool", "linux-x64", "LICENSE"))).to.be.false;
+	});
+});
+
+describe("generatePackages (single mode)", () => {
+	const base: Omit<IGeneratePackages, "work" | "dist" | "targets" | "packageJsonTemplate"> = {
+		packageName: "mytool",
+		scope: "@mytool",
+		binName: "mytool",
+		mode: "single",
+		version: "1.0.0",
+		readme: "# mytool\n",
+		license: null,
+	};
+
+	test("bundles every binary in the main package, with no platform packages", () => {
+		const work = tmpDir();
+		const dist = path.join(work, "dist");
+		fs.mkdirSync(dist, { recursive: true });
+		makeArchive(dist, "mytool_1.0.0_linux_amd64.tar.gz", "mytool");
+		makeArchive(dist, "mytool_1.0.0_darwin_arm64.tar.gz", "mytool");
+
+		const targets = [
+			{ filename: "mytool_1.0.0_linux_amd64.tar.gz", os: "linux", cpu: "x64", libc: null },
+			{ filename: "mytool_1.0.0_darwin_arm64.tar.gz", os: "darwin", cpu: "arm64", libc: null },
+		];
+
+		const { result } = captureOutput(() =>
+			generatePackages({ ...base, work, dist, targets, packageJsonTemplate: {} }),
+		);
+
+		const mainDir = path.join(work, "pkg", "mytool");
+		expect(result.mainDir).to.equal(mainDir);
+		expect(result.platformPackages).to.deep.equal([]);
+
+		expect(fs.existsSync(path.join(mainDir, "bin", "mytool-linux-x64"))).to.be.true;
+		expect(fs.existsSync(path.join(mainDir, "bin", "mytool-darwin-arm64"))).to.be.true;
+		expect(fs.existsSync(path.join(mainDir, "bin", "mytool"))).to.be.true;
+
+		const mainPkg = JSON.parse(fs.readFileSync(path.join(mainDir, "package.json"), "utf8"));
+		expect(mainPkg.name).to.equal("mytool");
+		expect(mainPkg.bin).to.deep.equal({ mytool: "bin/mytool" });
+		expect(mainPkg.optionalDependencies).to.be.undefined;
+
+		const wrapperSource = fs.readFileSync(path.join(mainDir, "bin", "mytool"), "utf8");
+		expect(wrapperSource).to.match(/mytool-linux-x64/);
+		expect(wrapperSource).to.match(/mytool-darwin-arm64/);
+	});
+
+	test("suffixes .exe on windows binaries", () => {
+		const work = tmpDir();
+		const dist = path.join(work, "dist");
+		fs.mkdirSync(dist, { recursive: true });
+
+		const srcDir = tmpDir();
+		fs.writeFileSync(path.join(srcDir, "mytool.exe"), "not a real exe");
+		execFileSync("zip", [
+			"-j",
+			path.join(dist, "mytool_1.0.0_windows_amd64.zip"),
+			path.join(srcDir, "mytool.exe"),
+		]);
+
+		const targets = [
+			{ filename: "mytool_1.0.0_windows_amd64.zip", os: "win32", cpu: "x64", libc: null },
+		];
+
+		captureOutput(() =>
+			generatePackages({ ...base, work, dist, targets, packageJsonTemplate: {} }),
+		);
+
+		const mainDir = path.join(work, "pkg", "mytool");
+		expect(fs.existsSync(path.join(mainDir, "bin", "mytool-win32-x64.exe"))).to.be.true;
+	});
+
+	test("keeps glibc and musl builds of the same os/cpu as separate candidate files", () => {
+		const work = tmpDir();
+		const dist = path.join(work, "dist");
+		fs.mkdirSync(dist, { recursive: true });
+		makeArchive(dist, "mytool-x86_64-unknown-linux-gnu.tar.gz", "mytool");
+		makeArchive(dist, "mytool-x86_64-unknown-linux-musl.tar.gz", "mytool");
+
+		const targets = [
+			{
+				filename: "mytool-x86_64-unknown-linux-gnu.tar.gz",
+				os: "linux",
+				cpu: "x64",
+				libc: "glibc",
+			},
+			{
+				filename: "mytool-x86_64-unknown-linux-musl.tar.gz",
+				os: "linux",
+				cpu: "x64",
+				libc: "musl",
+			},
+		];
+
+		captureOutput(() =>
+			generatePackages({ ...base, work, dist, targets, packageJsonTemplate: {} }),
+		);
+
+		const mainDir = path.join(work, "pkg", "mytool");
+		expect(fs.existsSync(path.join(mainDir, "bin", "mytool-linux-x64-glibc"))).to.be.true;
+		expect(fs.existsSync(path.join(mainDir, "bin", "mytool-linux-x64-musl"))).to.be.true;
+	});
+
+	test("writes README and LICENSE to the main package only", () => {
+		const work = tmpDir();
+		const dist = path.join(work, "dist");
+		fs.mkdirSync(dist, { recursive: true });
+		makeArchive(dist, "mytool_1.0.0_linux_amd64.tar.gz", "mytool");
+
+		const targets = [
+			{ filename: "mytool_1.0.0_linux_amd64.tar.gz", os: "linux", cpu: "x64", libc: null },
+		];
+
+		captureOutput(() =>
+			generatePackages({
+				...base,
+				work,
+				dist,
+				targets,
+				packageJsonTemplate: {},
+				readme: "# hello\n",
+				license: "MIT License text\n",
+			}),
+		);
+
+		const mainDir = path.join(work, "pkg", "mytool");
+		expect(fs.readFileSync(path.join(mainDir, "README.md"), "utf8")).to.equal("# hello\n");
+		expect(fs.readFileSync(path.join(mainDir, "LICENSE"), "utf8")).to.equal("MIT License text\n");
 	});
 });

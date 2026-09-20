@@ -20,6 +20,15 @@ inputs:
       Defaults to package-name.
     required: false
     default: ""
+  mode:
+    description: >-
+      - "multi" publishes one platform package per os/cpu (as optionalDependencies of
+        the main package) - only the matching one gets installed.
+      - "single" instead bundles every platform's binary directly inside the main
+        package - no platform packages, no optionalDependencies - at the cost of a
+        larger install, since every platform's binary ships to every consumer.
+    required: false
+    default: "multi"
   tag:
     description: Release tag to publish from (e.g. v1.2.3).
     required: true
@@ -91,6 +100,7 @@ runs:
         PACKAGE_NAME: ${{ inputs.package-name }}
         SCOPE: ${{ inputs.scope }}
         BIN_NAME: ${{ inputs.bin-name }}
+        MODE: ${{ inputs.mode }}
         PACKAGE_JSON_TEMPLATE: ${{ inputs.package-json-template }}
         README: ${{ inputs.readme }}
         LICENSE_FILE: ${{ inputs.license-file }}

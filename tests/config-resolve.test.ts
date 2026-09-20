@@ -11,7 +11,13 @@ import {
 import { tmpDir } from "./helpers.ts";
 
 describe("resolveConfig", () => {
-	const base: RawConfig = { tag: "v1.2.3", packageName: "mytool", scope: "", binName: "" };
+	const base: RawConfig = {
+		tag: "v1.2.3",
+		packageName: "mytool",
+		scope: "",
+		binName: "",
+		mode: "",
+	};
 
 	describe("version", () => {
 		test("strips a leading v from the tag", () => {
@@ -59,6 +65,22 @@ describe("resolveConfig", () => {
 	test("passes packageName through unchanged", () => {
 		expect(resolveConfig(base).packageName).to.equal("mytool");
 	});
+
+	describe("mode", () => {
+		test("defaults to multi", () => {
+			expect(resolveConfig(base).mode).to.equal("multi");
+		});
+
+		test("respects an explicit single mode", () => {
+			expect(resolveConfig({ ...base, mode: "single" }).mode).to.equal("single");
+		});
+
+		test("rejects an unknown mode", () => {
+			expect(() => resolveConfig({ ...base, mode: "bogus" })).to.throw(
+				/Invalid mode "bogus": expected "multi" or "single"/,
+			);
+		});
+	});
 });
 
 describe("configResolve", () => {
@@ -75,6 +97,7 @@ describe("configResolve", () => {
 		expect(vars.PACKAGE_NAME).to.equal("mytool");
 		expect(vars.SCOPE).to.equal("@mytool");
 		expect(vars.BIN_NAME).to.equal("mytool");
+		expect(vars.MODE).to.equal("multi");
 		expect(vars.PACKAGE_JSON_TEMPLATE).to.equal("npm/package.json");
 		expect(vars.README).to.equal("");
 		expect(vars.LICENSE_FILE).to.equal("");
@@ -94,6 +117,11 @@ describe("configResolve", () => {
 		const vars = run({ readme: "docs/README.md", licenseFile: "LICENSE.txt" });
 		expect(vars.README).to.equal("docs/README.md");
 		expect(vars.LICENSE_FILE).to.equal("LICENSE.txt");
+	});
+
+	test("respects an explicit single mode", () => {
+		const vars = run({ mode: "single" });
+		expect(vars.MODE).to.equal("single");
 	});
 });
 
@@ -118,6 +146,7 @@ function run(overrides: Partial<IConfigResolve> = {}): Record<string, string> {
 		packageName: "mytool",
 		scope: "",
 		binName: "",
+		mode: "",
 		packageJsonTemplate: "npm/package.json",
 		readme: "",
 		licenseFile: "",

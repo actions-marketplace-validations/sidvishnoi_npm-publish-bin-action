@@ -10,7 +10,9 @@ You built your tool using a native toolchain. But many people want an easier way
 
 A common way to ship a prebuilt binary through npm is a package with a `postinstall` script that downloads (or compiles) the right binary for the host machine after install. That script runs arbitrary code on every install, which is why `--ignore-scripts`, lockfile script-blocking, and registries/scanners that flag postinstall hooks have all become more common. Some environments now simply refuse to run postinstall scripts for security reasons.
 
-This GitHub Action avoids `postinstall` entirely. Each platform/arch gets its own npm package containing just that platform's binary, tagged with the `os`/`cpu` (and `libc`) fields npm already understands. The main package lists every platform package as an `optionalDependencies` and npm installs only the one matching the current machine, no script involved. The main package's [bin wrapper](./src/wrapper-template.txt) then execs whichever one npm put on disk. It's the same distribution model esbuild and swc use for their native binaries.
+This GitHub Action avoids `postinstall` entirely. By default (`mode: multi`), each platform/arch gets its own npm package containing just that platform's binary, tagged with the `os`/`cpu` (and `libc`) fields npm already understands. The main package lists every platform package as an `optionalDependencies` and npm installs only the one matching the current machine, no script involved. The main package's [bin wrapper](./src/wrapper-template.txt) then execs whichever one npm put on disk. It's the same distribution model esbuild and swc use for their native binaries.
+
+With `mode: single`, every platform's binary is bundled directly inside the main package instead - no platform packages, no `optionalDependencies`. This is simpler (one package, no reliance on npm resolving optional platform deps correctly) but every consumer downloads every platform's binary, so the install is larger. The main package's [bin wrapper](./src/wrapper-template-single.txt) picks the right one on disk at runtime.
 
 ## Example Usage
 
@@ -58,6 +60,7 @@ See [`action.yml`](action.yml) for the full descriptions; here's a summary:
 | `npm-token` | no | none (OIDC) | npm auth token; omit to publish via OIDC trusted publishing instead. |
 | `scope` | no | `@<package-name>` | Prefix for the per-platform packages: an npm scope (`@mytool`), or unscoped (`mytool`) if it doesn't start with `@`. |
 | `bin-name` | no | `package-name` | Executable name, and what asset filenames are expected to mention. |
+| `mode` | no | `multi` | `multi` publishes one platform package per os/cpu as `optionalDependencies`; `single` bundles every platform's binary inside the main package instead. |
 | `package-json-template` | no | none | Path to a `package.json`-shaped file for fields that don't vary per platform. |
 | `readme` | no | repo's `README.md` | README to include in the main package. |
 | `license-file` | no | repo's `LICENSE` | LICENSE to include in every package. |
@@ -78,3 +81,4 @@ No dependency is ever installed at runtime. `action.yml` runs the `.ts` files di
 - **OIDC publishing:** When `npm-token` is not provided, the GitHub Action assumes [trusted publishing](https://docs.npmjs.com/trusted-publishers) via an OIDC token from the workflow run. But to configure trusted publishing, you need the packages to already exist on npm. For the first publish, you need to use `npm-token`.
 - `name`, `version`, `bin`, `files`, `optionalDependencies`, `os`, and `cpu` in `package-json-template` are always computed by this GitHub Action and override the template unconditionally; only the remaining fields (`description`, `license`, `repository`, ...) pass through.
 - The generated main package's bin wrapper resolves the right platform package via `optionalDependencies`; a consumer installing with `--no-optional` (or a package manager/lockfile that drops platform-specific optional deps) gets a "could not find the binary" error at runtime, not at install time.
+- In `single` mode, since every binary ships in the one package, choosing between a glibc and a musl build of the same os/cpu happens at runtime (via a `process.report`-based heuristic), not at install time like in `multi` mode.
