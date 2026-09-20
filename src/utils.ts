@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export function run<A>(fn: (arg: A) => void, arg: A): void {
@@ -7,7 +9,9 @@ export function run<A>(fn: (arg: A) => void, arg: A): void {
 		try {
 			fn(arg);
 		} catch (err) {
-			console.error(err instanceof Error ? err.message : err);
+			const message = err instanceof Error ? err.message : String(err);
+			const inActions = process.env.GITHUB_ACTIONS === "true";
+			console.error(inActions ? `::error::${message}` : message);
 			process.exit(1);
 		}
 	});
@@ -40,17 +44,35 @@ export function sh(parts: TemplateStringsArray, ...values: ShValue[]): string {
 	if (!command) throw new Error("sh(): empty command");
 
 	const resolvedCommand = binOverrides.get(command) ?? command;
+	const displayArgv = argv.map(shortenPath);
 
-	return withGroup(`$ ${argv.join(" ")}`, () => {
-		const result = spawnSync(resolvedCommand, args, { encoding: "utf8" });
-		if (result.stdout) process.stdout.write(result.stdout);
-		if (result.stderr) process.stderr.write(result.stderr);
+	return withGroup(`$ ${displayArgv.join(" ")}`, () => {
+		const outputFile = path.join(os.tmpdir(), `sh-output-${randomUUID()}`);
+		const fd = fs.openSync(outputFile, "w+");
+		let result: ReturnType<typeof spawnSync>;
+		let output: string;
+		try {
+			result = spawnSync(resolvedCommand, args, { stdio: ["ignore", fd, fd] });
+			output = fs.readFileSync(outputFile, "utf8");
+		} finally {
+			fs.closeSync(fd);
+			fs.rmSync(outputFile, { force: true });
+		}
+
+		if (output) process.stdout.write(output);
 		if (result.error) throw result.error;
 		if (result.status !== 0) {
 			throw new Error(`Command failed (exit ${result.status}): ${argv.join(" ")}`);
 		}
-		return result.stdout.trim();
+		return output.trim();
 	});
+}
+
+// for display in logs
+// "/home/runner/work/_temp/npm-publish/pkg/foo" becomes "WORK/pkg/foo"
+export function shortenPath(value: string): string {
+	const work = process.env.WORK;
+	return work && value.startsWith(work) ? `WORK${value.slice(work.length)}` : value;
 }
 
 export function readJsonFile<T>(filePath: string): T {
