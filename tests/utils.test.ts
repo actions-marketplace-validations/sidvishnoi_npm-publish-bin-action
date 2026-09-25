@@ -25,7 +25,7 @@ describe("run", () => {
 		expect(received).to.deep.equal([42]);
 	});
 
-	test("catches a thrown error, prints its message, and exits with status 1", async () => {
+	test("catches a thrown error, prints it as an ::error:: annotation, and exits with status 1", async () => {
 		const originalExit = process.exit;
 		const originalError = console.error;
 		let exitCode: unknown;
@@ -47,11 +47,11 @@ describe("run", () => {
 			console.error = originalError;
 		}
 
-		expect(errorMessage).to.equal("boom");
+		expect(errorMessage).to.equal("::error::boom");
 		expect(exitCode).to.equal(1);
 	});
 
-	test("prints a thrown non-Error value as-is", async () => {
+	test("prints a thrown non-Error value as an ::error:: annotation", async () => {
 		const originalExit = process.exit;
 		const originalError = console.error;
 		let errorMessage: unknown;
@@ -70,15 +70,13 @@ describe("run", () => {
 			console.error = originalError;
 		}
 
-		expect(errorMessage).to.equal("boom");
+		expect(errorMessage).to.equal("::error::boom");
 	});
 });
 
 describe("withGroup", () => {
-	test("uses ::group::/::endgroup:: markers when GITHUB_ACTIONS=true", () => {
-		process.env.GITHUB_ACTIONS = "true";
+	test("uses ::group::/::endgroup:: markers", () => {
 		const { result, logs } = captureOutput(() => withGroup("label", () => 42));
-		delete process.env.GITHUB_ACTIONS;
 
 		expect(result).to.equal(42);
 		expect(logs).to.deep.equal(["::group::label", "::endgroup::"]);

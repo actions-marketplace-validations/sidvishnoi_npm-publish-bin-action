@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { withBinOverride } from "#src/utils.ts";
 
+process.env.GITHUB_ACTIONS = "true";
+
 export function tmpDir(): string {
 	return fs.mkdtempSync(path.join(os.tmpdir(), "publish-npm-test-"));
 }
